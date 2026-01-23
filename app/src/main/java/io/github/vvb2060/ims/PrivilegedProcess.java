@@ -69,18 +69,21 @@ public class PrivilegedProcess extends Instrumentation {
         var cm = context.getSystemService(CarrierConfigManager.class);
         var sm = context.getSystemService(SubscriptionManager.class);
         var values = getConfig();
-        for (SubscriptionInfo info : sm.getActiveSubscriptionInfoList()) {
-            var subId = info.getSubscriptionId();
-            var bundle = cm.getConfigForSubId(subId);
-            if (bundle == null || bundle.getInt("vvb2060_config_version", 0) != BuildConfig.VERSION_CODE) {
-                values.putInt("vvb2060_config_version", BuildConfig.VERSION_CODE);
-                try {
-                    var method = CarrierConfigManager.class.getMethod("overrideConfig", int.class, PersistableBundle.class, boolean.class);
-                    method.invoke(cm, subId, values, persistent);
-                } catch (Exception e) {
-                    Log.e(TAG, Log.getStackTraceString(e));
+        try {
+            var getSubId = SubscriptionManager.class.getMethod("getActiveSubscriptionIdList");
+            var subIds = (int[]) getSubId.invoke(sm);
+            if (subIds != null) {
+                for (var subId : subIds) {
+                    var bundle = cm.getConfigForSubId(subId);
+                    if (bundle == null || bundle.getInt("vvb2060_config_version", 0) != BuildConfig.VERSION_CODE) {
+                        values.putInt("vvb2060_config_version", BuildConfig.VERSION_CODE);
+                        var method = CarrierConfigManager.class.getMethod("overrideConfig", int.class, PersistableBundle.class, boolean.class);
+                        method.invoke(cm, subId, values, persistent);
+                    }
                 }
             }
+        } catch (Exception e) {
+            Log.e(TAG, Log.getStackTraceString(e));
         }
     }
 
