@@ -74,12 +74,10 @@ public class PrivilegedProcess extends Instrumentation {
             var subIds = (int[]) getSubId.invoke(sm);
             if (subIds != null) {
                 for (var subId : subIds) {
-                    var bundle = cm.getConfigForSubId(subId);
-                    if (bundle == null || bundle.getInt("vvb2060_config_version", 0) != BuildConfig.VERSION_CODE) {
-                        values.putInt("vvb2060_config_version", BuildConfig.VERSION_CODE);
-                        var method = CarrierConfigManager.class.getMethod("overrideConfig", int.class, PersistableBundle.class, boolean.class);
-                        method.invoke(cm, subId, values, persistent);
-                    }
+                    values.putInt("vvb2060_config_version", BuildConfig.VERSION_CODE);
+                    var method = CarrierConfigManager.class.getMethod("overrideConfig", int.class, PersistableBundle.class, boolean.class);
+                    method.invoke(cm, subId, values, persistent);
+                    Log.d(TAG, "Config applied unconditionally");
                 }
             }
         } catch (Exception e) {
