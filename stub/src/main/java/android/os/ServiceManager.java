@@ -1,7 +1,5 @@
 package android.os;
 
-public final class ServiceManager {
-    public static IBinder getService(String name) {
-        throw new RuntimeException("Stub!");
-    }
+public class ServiceManager {
+    public static IBinder getService(String name) { throw new RuntimeException("Stub!"); }
 }

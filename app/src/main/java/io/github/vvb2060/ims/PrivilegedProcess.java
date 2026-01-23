@@ -69,15 +69,23 @@ public class PrivilegedProcess extends Instrumentation {
         var cm = context.getSystemService(CarrierConfigManager.class);
         var sm = context.getSystemService(SubscriptionManager.class);
         var values = getConfig();
-        try {
-            var getSubId = SubscriptionManager.class.getMethod("getActiveSubscriptionIdList");
-            var subIds = (int[]) getSubId.invoke(sm);
-            if (subIds != null) {
-                for (var subId : subIds) {
-                    values.putInt("vvb2060_config_version", BuildConfig.VERSION_CODE);
-                    var method = CarrierConfigManager.class.getMethod("overrideConfig", int.class, PersistableBundle.class, boolean.class);
-                    method.invoke(cm, subId, values, persistent);
-                    Log.d(TAG, "Config applied unconditionally");
+        var subInfos = sm.getActiveSubscriptionInfoList();
+        if (subInfos == null) return;
+        for (var subInfo : subInfos) {
+            var subId = subInfo.getSubscriptionId();
+            var bundle = cm.getConfigForSubId(subId);
+            if (bundle == null || bundle.getInt("vvb2060_config_version", 0) != BuildConfig.VERSION_CODE) {
+                values.putInt("vvb2060_config_version", BuildConfig.VERSION_CODE);
+                try {
+                    cm.getClass().getMethod("overrideConfig", int.class, PersistableBundle.class, boolean.class)
+                            .invoke(cm, subId, values, persistent);
+                } catch (Exception e) {
+                    try {
+                        cm.getClass().getMethod("overrideConfig", int.class, PersistableBundle.class)
+                                .invoke(cm, subId, values);
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Failed to override config", ex);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -87,30 +95,23 @@ public class PrivilegedProcess extends Instrumentation {
 
     private static PersistableBundle getConfig() {
         var bundle = new PersistableBundle();
-        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_SUPPORTS_SS_OVER_UT_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_VT_AVAILABLE_BOOL, true);
 
-        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_CROSS_SIM_IMS_AVAILABLE_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_ENABLE_CROSS_SIM_CALLING_ON_OPPORTUNISTIC_DATA_BOOL, true);
-
-        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_WFC_IMS_AVAILABLE_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_WFC_SUPPORTS_WIFI_ONLY_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_EDITABLE_WFC_MODE_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_EDITABLE_WFC_ROAMING_MODE_BOOL, true);
-        bundle.putBoolean("show_wifi_calling_icon_in_status_bar_bool", true);
-        bundle.putInt("wfc_spn_format_idx_int", 6);
-
-        bundle.putBoolean(CarrierConfigManager.KEY_EDITABLE_ENHANCED_4G_LTE_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_HIDE_ENHANCED_4G_LTE_BOOL, false);
-        bundle.putBoolean(CarrierConfigManager.KEY_HIDE_LTE_PLUS_DATA_ICON_BOOL, false);
-
-        bundle.putBoolean(CarrierConfigManager.KEY_VONR_ENABLED_BOOL, true);
-        bundle.putBoolean(CarrierConfigManager.KEY_VONR_SETTING_VISIBILITY_BOOL, true);
+        // 5G/IMS Unlock
         bundle.putIntArray(CarrierConfigManager.KEY_CARRIER_NR_AVAILABILITIES_INT_ARRAY,
                 new int[]{CarrierConfigManager.CARRIER_NR_AVAILABILITY_NSA,
                         CarrierConfigManager.CARRIER_NR_AVAILABILITY_SA});
+        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_VONR_ENABLED_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_WFC_IMS_AVAILABLE_BOOL, true);
+
+        // Metro signal / Handover optimization (QNS)
+        bundle.putInt("qns.minimum_handover_guarding_timer_ms_int", 1000);
+        bundle.putIntArray("qns.voice_ngran_ssrsrp_int_array", new int[]{-120, -124});
+        bundle.putIntArray("qns.ho_restrict_time_with_low_rtp_quality_int_array", new int[]{3000, 3000});
+
+        // Signal Display Optimization
         bundle.putIntArray(CarrierConfigManager.KEY_5G_NR_SSRSRP_THRESHOLDS_INT_ARRAY,
+                // Boundaries: [-140 dBm, -44 dBm]
                 new int[]{
                         -125, /* SIGNAL_STRENGTH_POOR */
                         -115, /* SIGNAL_STRENGTH_MODERATE */
@@ -118,41 +119,33 @@ public class PrivilegedProcess extends Instrumentation {
                         -95,  /* SIGNAL_STRENGTH_GREAT */
                 });
 
-        // QNS
-        bundle.putInt("qns.minimum_handover_guarding_timer_ms_int", 1000);
-        bundle.putIntArray("qns.voice_ngran_ssrsrp_int_array", new int[]{-120, -124});
-        bundle.putIntArray("qns.idle_ngran_ssrsrp_int_array", new int[]{-120, -124});
-        bundle.putIntArray("qns.voice_wifi_rssi_int_array", new int[]{-85, -90});
-        bundle.putIntArray("qns.idle_wifi_rssi_int_array", new int[]{-85, -90});
+        // GPS/Location Optimization
+        bundle.putString("gps.normal_psds_server", "gllto.glpals.com");
+        bundle.putString("gps.longterm_psds_server_1", "gllto.glpals.com");
 
-        // Traffic
-        bundle.putBoolean("unmetered_nr_nsa_bool", true);
-        bundle.putBoolean("unmetered_nr_sa_bool", true);
-        bundle.putBoolean("unmetered_nr_nsa_mmwave_bool", true);
-        bundle.putBoolean("unmetered_nr_sa_mmwave_bool", true);
-        bundle.putString("tcp_buffersizes_string", "2097152,4194304,8388608,4096,1048576,4194304");
+        // UI/Icon Enhancement
+        bundle.putString("5g_icon_configuration_string", "connected_mmwave:5G_PLUS");
+        bundle.putIntArray("additional_nr_advanced_bands_int_array", new int[]{78});
 
-        // UI Bands
-        bundle.putIntArray("additional_nr_advanced_bands_int_array", new int[]{41, 78, 79});
-
-        // UI Icons & Bars
-        bundle.putBoolean("show_4g_for_lte_data_icon_bool", true);
-        bundle.putString("5g_icon_configuration_string", "connected_mmwave:5G_PLUS,connected:5G,connected_rrc_idle:5G,not_restricted_rrc_idle:5G,not_restricted_rrc_con:5G");
-        bundle.putIntArray("lte_rsrp_thresholds_int_array", new int[]{-125, -115, -105, -95});
-        bundle.putIntArray("5g_nr_ssrsrq_thresholds_int_array", new int[]{-43, -20, -15, -10});
-
-        // GPS
-        bundle.putString("gps.normal_psds_server", "https://gllto.glpals.com/rto/v1/latest/rto.dat");
-        bundle.putString("gps.longterm_psds_server_1", "https://gllto.glpals.com/7day/v5/latest/lto2.dat");
-        bundle.putString("gps.realtime_psds_server", "https://gllto.glpals.com/rtistatus4.dat");
-
-        // Advanced
-        bundle.putStringArray("read_only_apn_types_string_array", new String[0]);
-        bundle.putStringArray("read_only_apn_fields_string_array", new String[0]);
-        bundle.putBoolean("apn_expand_bool", true);
-        bundle.putBoolean("carrier_rcs_provisioning_required_bool", false);
+        // Other Enhancements
         bundle.putInt("imssms.sms_max_retry_over_ims_count_int", 3);
-        bundle.putBoolean("ignore_data_enabled_changed_for_video_calls", true);
+        bundle.putBoolean("unmetered_nr_sa_bool", true);
+        bundle.putBoolean("apn_expand_bool", true);
+
+        // Existing configurations preserved
+        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_SUPPORTS_SS_OVER_UT_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_VT_AVAILABLE_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_CROSS_SIM_IMS_AVAILABLE_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_ENABLE_CROSS_SIM_CALLING_ON_OPPORTUNISTIC_DATA_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_CARRIER_WFC_SUPPORTS_WIFI_ONLY_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_EDITABLE_WFC_MODE_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_EDITABLE_WFC_ROAMING_MODE_BOOL, true);
+        bundle.putBoolean("show_wifi_calling_icon_in_status_bar_bool", true);
+        bundle.putInt("wfc_spn_format_idx_int", 6);
+        bundle.putBoolean(CarrierConfigManager.KEY_EDITABLE_ENHANCED_4G_LTE_BOOL, true);
+        bundle.putBoolean(CarrierConfigManager.KEY_HIDE_ENHANCED_4G_LTE_BOOL, false);
+        bundle.putBoolean(CarrierConfigManager.KEY_HIDE_LTE_PLUS_DATA_ICON_BOOL, false);
+        bundle.putBoolean(CarrierConfigManager.KEY_VONR_SETTING_VISIBILITY_BOOL, true);
 
         return bundle;
     }

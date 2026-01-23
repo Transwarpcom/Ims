@@ -29,14 +29,17 @@ public class ShizukuProvider extends rikka.shizuku.ShizukuProvider {
 
     private boolean skip = false;
 
+    private static int getSdkSandboxUid() {
+        try {
+            return (int) Process.class.getMethod("toSdkSandboxUid", int.class).invoke(null, Os.getuid());
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
-        int sdkUid = -1;
-        try {
-            sdkUid = (int) Process.class.getMethod("toSdkSandboxUid", int.class).invoke(null, Os.getuid());
-        } catch (Exception e) {
-            // ignore
-        }
+        final int sdkUid = getSdkSandboxUid();
         var callingUid = Binder.getCallingUid();
         if (callingUid != sdkUid && callingUid != Process.SHELL_UID) {
             return new Bundle();
@@ -81,7 +84,7 @@ public class ShizukuProvider extends rikka.shizuku.ShizukuProvider {
             var am = IActivityManager.Stub.asInterface(new ShizukuBinderWrapper(binder));
             var name = new ComponentName(context, PrivilegedProcess.class);
             var flags = 1; // ActivityManager.INSTR_FLAG_DISABLE_HIDDEN_API_CHECKS
-            flags |= 4; // ActivityManager.INSTR_FLAG_INSTRUMENT_SDK_SANDBOX
+            flags |= 2; // ActivityManager.INSTR_FLAG_INSTRUMENT_SDK_SANDBOX;
             var connection = new UiAutomationConnection();
             am.startInstrumentation(name, null, flags, new Bundle(), null, connection, 0, null);
         } catch (Exception e) {
