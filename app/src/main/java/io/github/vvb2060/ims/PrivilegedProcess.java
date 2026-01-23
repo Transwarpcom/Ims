@@ -13,7 +13,6 @@ import android.os.Parcel;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.telephony.CarrierConfigManager;
-import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.util.Log;
 
@@ -88,8 +87,6 @@ public class PrivilegedProcess extends Instrumentation {
                     }
                 }
             }
-        } catch (Exception e) {
-            Log.e(TAG, Log.getStackTraceString(e));
         }
     }
 

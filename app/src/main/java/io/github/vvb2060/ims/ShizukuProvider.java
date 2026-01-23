@@ -53,11 +53,10 @@ public class ShizukuProvider extends rikka.shizuku.ShizukuProvider {
             });
         } else if (METHOD_GET_BINDER.equals(method) && callingUid == sdkUid && extras != null) {
             skip = true;
-            final int finalSdkUid = sdkUid;
             Shizuku.addBinderReceivedListener(() -> {
                 var binder = extras.getBinder("binder");
                 if (binder != null && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                    startShellPermissionDelegate(binder, finalSdkUid);
+                    startShellPermissionDelegate(binder, sdkUid);
                 }
             });
         }
